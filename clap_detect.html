@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TensorFlow.js Clapping Detector</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+  <script src="https://www.espruino.com/js/uart.js"></script>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; line-height: 1.6;">
+
+  <h2>Bangle.js Clapping Detector</h2>
+
+  <p>
+    Trains a 1D CNN model to detect clapping from live accelerometer data.
+  </p>
+
+  <ol>
+    <li>Click 'Connect' and pair with your Bangle.js watch.</li>
+    <li>Click 'Record Clapping' and clap for ~10 seconds.</li>
+    <li>Click 'Record Not Clapping' and do other things (type, wave, sit still) for ~10 seconds.</li>
+    <li>Repeat steps 2 & 3 a few times to get a good dataset.</li>
+    <li>Click 'Train Model'.</li>
+    <li>Once trained, clap and watch the 'Prediction' value go near 1.0!</li>
+  </ol>
+
+  <hr>
+
+  <h3>Controls</h3>
+  <button id="btn_connect">Connect to Watch</button>
+  <button id="btn_stop_stream" style="display: none;">Stop Stream</button>
+  <br/><br/>
+
+  <label for="window_size">Window Size:</label>
+  <input type="number" id="window_size" value="30" style="width: 60px;">
+  <label for="record_stride">Record Stride:</label>
+  <input type="number" id="record_stride" value="20" style="width: 60px;">
+  <br/><br/>
+
+  <button id="btn_rec_clap" style="background-color: #e0f0e0;">Record Clapping</button>
+  <button id="btn_rec_notclap" style="background-color: #f0e0e0;">Record Not Clapping</button>
+  <button id="btn_rec_stop" style="background-color: #eee;">Stop Recording</button>
+
+  <br/><br/>
+
+  <button id="btn_clear">Clear Data</button>
+  <button id="btn_train">Train Model!</button>
+  <br/><br/>
+  <button id="btn_export">Export Data</button>
+  <button id="btn_import">Import Data</button>
+
+  <h3>Status</h3>
+  <pre id="status">Not Connected</pre>
+
+  <h3>Live Data</h3>
+  <pre id="data_out">...</pre>
+
+  <h3>Prediction</h3>
+  <pre id="prediction_out" style="font-size: 2em; font-weight: bold; color: #007bff;">-</pre>
+
+
+<script>
+// --- UART & Bluetooth Setup ---
+UART.ports = UART.ports.filter(e => e.includes("Bluetooth"));
+UART.timeoutMax = 200;
+if (window.location.search) {
+  let searchParams = new URLSearchParams(window.location.search);
+  if (searchParams.has("dev"))
+    UART.optionsBluetooth.filters = [{ name: searchParams.get("dev") }];
+}
+
+// --- Model & Data Constants ---
+let WINDOW_SIZE = 30; // 30 samples
+let RECORD_STRIDE = 20; // Create a new training window every N samples
+const NUM_CHANNELS = 4;  // x, y, z, magnitude
+let INPUT_SHAPE = [WINDOW_SIZE, NUM_CHANNELS];
+let gestures = {
+  0: [], // Not Clapping
+  1: [], // Clapping
+};
+let model;
+
+// --- App State ---
+let dataBuffer = [];      // Holds the most recent WINDOW_SIZE samples for live prediction
+let recordState = -1;     // -1=off, 0=rec not clap, 1=rec clap
+
+// --- DOM Elements ---
+const btnConnect = document.getElementById("btn_connect");
+const btnStopStream = document.getElementById("btn_stop_stream");
+const btnRecClap = document.getElementById("btn_rec_clap");
+const btnRecNotClap = document.getElementById("btn_rec_notclap");
+const btnRecStop = document.getElementById("btn_rec_stop");
+const btnClear = document.getElementById("btn_clear");
+const btnTrain = document.getElementById("btn_train");
+const btnExport = document.getElementById("btn_export");
+const btnImport = document.getElementById("btn_import");
+const preStatus = document.getElementById("status");
+const preDataOut = document.getElementById("data_out");
+const prePredictionOut = document.getElementById("prediction_out");
+const windowSizeInput = document.getElementById("window_size");
+const recordStrideInput = document.getElementById("record_stride");
+
+// --- Event Listeners for Parameters ---
+windowSizeInput.addEventListener("change", () => {
+    const newSize = parseInt(windowSizeInput.value, 10);
+    if (!isNaN(newSize) && newSize > 0) {
+        WINDOW_SIZE = newSize;
+        INPUT_SHAPE = [WINDOW_SIZE, NUM_CHANNELS];
+        console.log(`WINDOW_SIZE set to ${WINDOW_SIZE}`);
+        // Clear buffer as its size is now incorrect
+        dataBuffer = [];
+    } else {
+        // Reset to current value if input is invalid
+        windowSizeInput.value = WINDOW_SIZE;
+    }
+});
+
+recordStrideInput.addEventListener("change", () => {
+    const newStride = parseInt(recordStrideInput.value, 10);
+    if (!isNaN(newStride) && newStride > 0) {
+        RECORD_STRIDE = newStride;
+        console.log(`RECORD_STRIDE set to ${RECORD_STRIDE}`);
+    } else {
+        // Reset to current value if input is invalid
+        recordStrideInput.value = RECORD_STRIDE;
+    }
+});
+
+// --- Utility Functions ---
+function loadGestures() {
+  if (window.localStorage.getItem("GESTURES") !== null) {
+    try {
+      gestures = JSON.parse(window.localStorage.getItem("GESTURES"));
+    } catch (e) {
+      console.log("Gesture load failed", e);
+    }
+  }
+}
+function saveGestures() {
+  window.localStorage.setItem("GESTURES", JSON.stringify(gestures));
+}
+function getGestureState() {
+  const count0 = gestures[0]?.length || 0;
+  const count1 = gestures[1]?.length || 0;
+  return `Not Clapping: ${count0} samples\nClapping: ${count1} samples`;
+}
+function setStatus(txt) {
+  preStatus.innerText = txt;
+}
+function setPrediction(txt) {
+  prePredictionOut.innerText = txt;
+}
+
+// --- Data Import/Export ---
+function exportData() {
+  const dataStr = JSON.stringify(gestures, null, 2);
+  const dataBlob = new Blob([dataStr], {type : 'application/json'});
+  const url = window.URL.createObjectURL(dataBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'clapping-data.json';
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setStatus("Data exported.\n" + getGestureState());
+}
+
+function importData() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = readerEvent => {
+      try {
+        const importedGestures = JSON.parse(readerEvent.target.result);
+        // Basic validation
+        if (importedGestures && typeof importedGestures === 'object' && ('0' in importedGestures || '1' in importedGestures)) {
+          // Merge data
+          gestures[0] = gestures[0].concat(importedGestures[0] || []);
+          gestures[1] = gestures[1].concat(importedGestures[1] || []);
+          saveGestures();
+          setStatus("Data imported successfully.\n" + getGestureState());
+        } else {
+          setStatus("Import failed: Invalid JSON format.\n" + getGestureState());
+        }
+      } catch (err) {
+        setStatus("Import failed: " + err.message + "\n" + getGestureState());
+      }
+    };
+    reader.readAsText(file);
+  }
+  input.click();
+}
+
+
+// --- Bluetooth Data Handler ---
+async function onLine(l) {
+  // console.log("BT> Got line:", l);
+  let json = UART.parseRJSON(l);
+  if (json && json.t === "acc") {
+    // 1. Calculate Magnitude
+    const m = Math.sqrt(json.x * json.x + json.y * json.y + json.z * json.z);
+    const sample = [json.x, json.y, json.z, m];
+    preDataOut.innerText = `x: ${json.x.toFixed(2)}, y: ${json.y.toFixed(2)}, z: ${json.z.toFixed(2)}, m: ${m.toFixed(2)}`;
+
+    // 2. Add to data buffer for live prediction
+    dataBuffer.push(sample);
+    while (dataBuffer.length > WINDOW_SIZE) {
+      dataBuffer.shift(); // Keep buffer at exactly WINDOW_SIZE
+    }
+
+    // 3. Handle Recording
+    if (recordState !== -1) {
+      gestures[recordState].push(sample);
+      setStatus(getGestureState());
+    }
+
+    // 4. Handle Prediction
+    if (model && dataBuffer.length === WINDOW_SIZE) {
+      await makePrediction(dataBuffer);
+    }
+  }
+}
+
+// --- UI Event Listeners ---
+btnConnect.addEventListener("click", function() {
+  setStatus("Connecting...");
+  UART.write(`\x10reset()\n`) // Clear running code
+    .then(() => new Promise(resolve => setTimeout(resolve, 500)))
+    .then(() => UART.write(`\x10Bangle.setPollInterval(50); Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:e.x, y:e.y, z:e.z})));Bluetooth.println();\n`)) // 50ms = 20Hz
+    .then(function() {
+      let connection = UART.getConnection();
+      connection.removeListener("line", onLine);
+      connection.on("line", onLine);
+      setStatus(getGestureState());
+      btnConnect.style.display = 'none';
+      btnStopStream.style.display = 'inline-block';
+    })
+    .catch(e => {
+      setStatus("Connection Failed: " + e);
+    });
+});
+
+btnStopStream.addEventListener("click", function() {
+  UART.write(`\x10load()\n`) // reload default (watch) app
+    .then(function() {
+      let connection = UART.getConnection();
+      connection.removeListener("line", onLine);
+      setStatus("Stopped. " + getGestureState());
+      btnConnect.style.display = 'inline-block';
+      btnStopStream.style.display = 'none';
+    });
+});
+
+btnRecClap.addEventListener("click", () => {
+  recordState = 1;
+  setStatus("Recording CLAPPING...\n" + getGestureState());
+});
+btnRecNotClap.addEventListener("click", () => {
+  recordState = 0;
+  setStatus("Recording NOT CLAPPING...\n" + getGestureState());
+});
+btnRecStop.addEventListener("click", () => {
+  recordState = -1;
+  saveGestures();
+  setStatus("Stopped recording.\n" + getGestureState());
+});
+
+btnClear.addEventListener("click", function() {
+  gestures = { 0: [], 1: [] };
+  saveGestures();
+  setStatus("Data Cleared.\n" + getGestureState());
+});
+
+btnTrain.addEventListener("click", function() {
+  if (gestures[0].length < WINDOW_SIZE || gestures[1].length < WINDOW_SIZE) {
+    setStatus(`Please record at least ${WINDOW_SIZE} samples for BOTH classes before training.`);
+    return;
+  }
+  setStatus("Training... Please wait.");
+  setPrediction("-");
+  // Run in a timeout to allow the UI to update
+  setTimeout(() => {
+    trainModel().then(() => {
+      setStatus("Training Finished!\n" + getGestureState());
+    });
+  }, 10);
+});
+
+btnExport.addEventListener("click", exportData);
+btnImport.addEventListener("click", importData);
+
+// --- TensorFlow.js Functions ---
+
+// Prepare data for training
+function generateData() {
+  const inputs = [];
+  const outputs = [];
+
+  function processGesture(gestureSamples, label) {
+    if (gestureSamples.length < WINDOW_SIZE) {
+      return; // Not enough data to form even one window
+    }
+    for (let i = 0; i <= gestureSamples.length - WINDOW_SIZE; i += RECORD_STRIDE) {
+      const window = gestureSamples.slice(i, i + WINDOW_SIZE);
+      inputs.push(window);
+      outputs.push([label]);
+    }
+  }
+
+  // Add "Not Clapping" samples
+  processGesture(gestures[0], 0);
+
+  // Add "Clapping" samples
+  processGesture(gestures[1], 1);
+
+  if (inputs.length === 0) {
+    return { inputTensor: null, outputTensor: null };
+  }
+
+  const numSamples = inputs.length;
+  // Convert to 3D tensor for Conv1D
+  const inputTensor = tf.tensor3d(inputs, [numSamples, WINDOW_SIZE, NUM_CHANNELS]);
+  // Convert to 2D tensor for binary output
+  const outputTensor = tf.tensor2d(outputs, [numSamples, 1]);
+
+  return { inputTensor, outputTensor };
+}
+
+// Define, compile, and train the model
+async function trainModel() {
+  console.log('Starting model training...');
+  if (model) {
+    model.dispose(); // Dispose old model if one exists
+  }
+
+  // Step 1: Define the 1D CNN model architecture
+  model = tf.sequential();
+
+  model.add(tf.layers.conv1d({
+    filters: 16,
+    kernelSize: 5,
+    activation: 'relu',
+    inputShape: INPUT_SHAPE,
+  }));
+
+  model.add(tf.layers.maxPooling1d({ poolSize: 2 }));
+
+  model.add(tf.layers.conv1d({
+    filters: 32,
+    kernelSize: 5,
+    activation: 'relu',
+  }));
+
+  model.add(tf.layers.maxPooling1d({ poolSize: 2 }));
+
+  model.add(tf.layers.flatten());
+
+  model.add(tf.layers.dense({ units: 16, activation: 'relu' }));
+
+  model.add(tf.layers.dropout({ rate: 0.5 }));
+
+  model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
+
+  // Step 2: Prepare the data
+  const { inputTensor, outputTensor } = generateData();
+
+  if (inputTensor === null) {
+    setStatus("Not enough data to form a complete window for training.\n" + getGestureState());
+    return; // Stop training
+  }
+
+  // Step 3: Compile the model
+  model.compile({
+    optimizer: 'adam',
+    loss: 'binaryCrossentropy',
+    metrics: ['accuracy']
+  });
+
+  model.summary();
+
+  // Step 4: Train the model
+  const epochs = 50;
+  console.log(`Training for ${epochs} epochs...`);
+
+  await model.fit(inputTensor, outputTensor, {
+    epochs: epochs,
+    shuffle: true, // Shuffle data each epoch
+    callbacks: {
+      onEpochEnd: (epoch, logs) => {
+        setStatus(`Training... Epoch ${epoch + 1} / ${epochs}\nLoss: ${logs.loss.toFixed(4)}, Acc: ${logs.acc.toFixed(4)}`);
+        console.log(`Epoch ${epoch + 1}: Loss = ${logs.loss.toFixed(4)}, Accuracy = ${logs.acc.toFixed(4)}`);
+      }
+    }
+  });
+
+  console.log('Training complete!');
+
+  // Clean up Tensors
+  inputTensor.dispose();
+  outputTensor.dispose();
+}
+
+// Run prediction on a single window of data
+async function makePrediction(data) {
+  const inputTensor = tf.tensor3d([data], [1, WINDOW_SIZE, NUM_CHANNELS]);
+  const prediction = model.predict(inputTensor);
+  const probability = (await prediction.data())[0];
+
+  let label = probability > 0.5 ? "Clapping" : "Not Clapping";
+  setPrediction(`${label} (${probability.toFixed(3)})`);
+
+  inputTensor.dispose();
+  prediction.dispose();
+}
+
+// --- Load gestures on page start ---
+loadGestures();
+setStatus("Ready. " + getGestureState());
+
+</script>
+</body>
+</html>
