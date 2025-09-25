@@ -15,7 +15,7 @@ as <a href="https://apps.apple.com/us/app/bluefy-web-ble-browser/id1492822055">B
 <h2>Trying Bangle.js out</h2>
 
 <ul>
- <li><a href="https://banglejs.com/apps/" class="add_mac" target="_blank">Bangle.js App Loader</a></li>
+ <li><a href="https://banglejs.com/apps?dev_id=BANGLEJS2" class="add_mac" target="_blank">Bangle.js App Loader</a></li>
  <li><a href="https://espruino.com/ide" class="add_mac" target="_blank">Web IDE</a></li>
 </ul>
 
@@ -40,8 +40,12 @@ Set Social URL for Bangle.js:<br/>
 // if any links can take `dev=....` to help with finding the correct device, pass it on
 if (window.location.search) {
   let links = document.getElementsByClassName("add_mac");
-  for (let i=0;i<links.length;i++)
-    links[i].href += window.location.search;
+  for (let i=0;i<links.length;i++) {
+    if (links[i].href.includes("?"))
+      links[i].href += "&"+window.location.search.substr(1);
+    else
+      links[i].href += window.location.search;
+  }
 }
 
 // Set up UART.js for only Bluetooth
