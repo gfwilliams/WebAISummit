@@ -126,16 +126,16 @@ recordStrideInput.addEventListener("change", () => {
 
 // --- Utility Functions ---
 function loadGestures() {
-  if (window.localStorage.getItem("GESTURES") !== null) {
+  if (window.localStorage.getItem("CLAPDETECT") !== null) {
     try {
-      gestures = JSON.parse(window.localStorage.getItem("GESTURES"));
+      gestures = JSON.parse(window.localStorage.getItem("CLAPDETECT"));
     } catch (e) {
       console.log("Gesture load failed", e);
     }
   }
 }
 function saveGestures() {
-  window.localStorage.setItem("GESTURES", JSON.stringify(gestures));
+  window.localStorage.setItem("CLAPDETECT", JSON.stringify(gestures));
 }
 function getGestureState() {
   const count0 = gestures[0]?.length || 0;
