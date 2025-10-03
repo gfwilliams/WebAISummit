@@ -11,9 +11,12 @@
 Tensorflow training test
 ========================
 
+Click 'Connect' to connect to your Bangle and
+receive gestures when you make them with your hand.
+
 Usage:
 
-* Click 'Connect'
+* Click 'Clear Gestures'
 * Choose 'Wave' from the Gesture list
 * Wave the hand with the Bangle on, then stop (Gesture should be shown below)
 * do it again, 5 times
@@ -22,12 +25,15 @@ Usage:
 * do it again, 5 times
 * Choose 'Shake' from the Gesture list
 * Shake your hand then wait
+* do it again, 5 times
 * Change 'Gesture' to 'None' (so no new gestures are recorded)
 * Click 'Train'
-* Now make a gesture and see if it's predicted properly!
 
+**Note:** Gestures are saved to local storage, so if you come
+back to the page all you have to do is click 'Train' to retrain
+the model.
 
-
+Now make a gesture and see if it's predicted properly!
 </pre>
 
 <button id="btn_getgesture">Connect</button><br/>
@@ -38,7 +44,7 @@ Gesture:
   <option value="1">Clap</option>
   <option value="2">Shake Hand</option>
 </select>
-  
+
 <pre id="status">
 </pre>
 
@@ -56,8 +62,13 @@ if (window.location.search) {
     UART.optionsBluetooth.filters=[{name:searchParams.get("dev")}];
 }
 
-const TF_INPUTS = 150;
 const TF_OUTPUTS = 3;
+const TF_NAMES = [
+  "Wave",
+  "Clap",
+  "Shake Hand"
+];
+TF_NAMES[-1] = "Unknown";
 let gestures = {
   0 : [],
   1 : [],
@@ -65,12 +76,15 @@ let gestures = {
 };
 let model;
 
+// Handling loading/saving gestures
 if (window.localStorage.getItem("GESTURES")!==null) {
   try {
     gestures = JSON.parse(window.localStorage.getItem("GESTURES"));
   } catch (e) {
     console.log("Gesture load failed");
   }
+  for (var i=0;i<TF_OUTPUTS;i++)
+    if (!gestures[i]) gestures[i]=[];
 }
 function saveGestures() {
   window.localStorage.setItem("GESTURES", JSON.stringify(gestures));
@@ -85,6 +99,7 @@ function setStatus(txt) {
 
 setStatus("Gestures: "+getGestureState());
 
+// Handle gesture info coming from Bangle.js
 function onLine(l) {
   console.log("BT> Got line:", l);
   let json = UART.parseRJSON(l);
@@ -92,13 +107,20 @@ function onLine(l) {
     let currentGesture = parseInt(document.getElementById("gesturetype").value);
     if (currentGesture>=0)
       gestures[currentGesture].push(json.data);
-  
+    saveGestures();
     setStatus(getGestureState()+"\n"+
        currentGesture+" => "+JSON.stringify(json));
-    if (model) makePrediction(json.data).then( prediction => setStatus("Prediction: " + prediction) );
+    if (model) {
+      makePrediction(json.data).then( prediction => {
+        var maxv=0.5,maxi=-1;
+        prediction.forEach((v,i) => {if (v>maxv) {maxv=v;maxi=i}});
+        setStatus(`Prediction = ${TF_NAMES[maxi]} (${Array.from(prediction).map(v=>v.toFixed(2))})`);
+      });
+    }
   }
 }
 
+// Connect and ask Bangle.js to send gestures over
 document.getElementById("btn_getgesture").addEventListener("click", function() {
   setStatus("Connecting");
   UART.write(`\x10reset()\n`) // clear out everything currently running
@@ -111,10 +133,15 @@ document.getElementById("btn_getgesture").addEventListener("click", function() {
     setStatus("Ready!");
   });
 });
+// Clear gesture state
 document.getElementById("btn_clear").addEventListener("click", function() {
-  Object.keys(gestures).forEach(g => gestures[g] = []);
+  gestures = {};
+  for (var i=0;i<TF_OUTPUTS;i++)
+    gestures[i]=[];
+  saveGestures();
   setStatus("Gestures: "+getGestureState());
 });
+// Start training!
 document.getElementById("btn_train").addEventListener("click", function() {
   setStatus("Training");
   trainModel().then(() => {
@@ -122,58 +149,92 @@ document.getElementById("btn_train").addEventListener("click", function() {
   });
 });
 
+// Converts the flat array to a padded [5,3] array for tensorflow
 function dataToArray(data) {
-  var a = new Array(150);
-  for (var i=0;i<data.length;i++)
-    a[i] = data[i];
+  var a = new Array(50);
+  var scale = 64;
+  var records = Math.floor(data.length/3);
+  // copy in data
+  for (var i=0;i<records;i++)
+    a[i] = [data[i*3]/scale, data[i*3+1]/scale, data[i*3+2]/scale];
+  // pad out the end of the data with the last value
   let endXYZ = data.length-3;
-  for (var i=data.length;i<a.length;i+=3) {
-    a[i+0] = a[endXYZ+0];
-    a[i+1] = a[endXYZ+1];
-    a[i+2] = a[endXYZ+2];
+  for (var i=records;i<a.length;i++) {
+    a[i] = [data[endXYZ+0]/scale,data[endXYZ+1]/scale,data[endXYZ+2]/scale];
   }
   return a;
 }
 
-
-// A simple function to generate some dummy data for training
+// Generate data for training from our saved gestures
 function generateData() {
   const inputs = [];
   const outputs = [];
   let numSamples = 0;
 
   function addInputs(dataIn,dataOut) {
-    dataIn.forEach(data => {      
+    dataIn.forEach(data => {
       inputs.push(dataToArray(data));
       outputs.push(dataOut);
       numSamples++;
     });
   }
 
-  addInputs(gestures[0], [1,0,0]);
-  addInputs(gestures[1], [0,1,0]);
-  addInputs(gestures[2], [0,0,1]);
+  for (var i=0;i<TF_OUTPUTS;i++) {
+    var out = new Array(TF_OUTPUTS);
+    out.fill(0);
+    out[i] = 1;
+    addInputs(gestures[i], out);
+  }
+
 
   // Convert the arrays into TensorFlow.js Tensors
-  const inputTensor = tf.tensor2d(inputs, [numSamples, TF_INPUTS]);
+  const inputTensor = tf.tensor3d(inputs, [numSamples, 50,3]);
   const outputTensor = tf.tensor2d(outputs, [numSamples, TF_OUTPUTS]);
 
   return { inputTensor, outputTensor };
 }
 
-// Main function to define, compile, and train the model
+// Define, compile, and train the model
 async function trainModel() {
   console.log('Starting model training...');
 
   // Step 1: Define the model architecture
   model = tf.sequential();
-  
-  // A dense layer is a fully connected neural network layer.
-  // We'll use a single dense layer to keep this example simple.
-  // The input shape must match the number of features in your data (150).
-  model.add(tf.layers.dense({ 
-    units: TF_OUTPUTS, // Number of output neurons
-    inputShape: [TF_INPUTS] // Number of input features
+
+  // Input Shape: [50, 3] -> 50 keypoints, each with 3 features (X, Y, Z)
+  model.add(tf.layers.conv1d({
+    inputShape: [50, 3], // [keypoints, features]
+    filters: 32,         // Number of filters/feature maps
+    kernelSize: 5,       // Window size to slide over the 50 keypoints
+    activation: 'relu'
+  }));
+
+  // Pooling to reduce the dimensionality and provide translation invariance
+  model.add(tf.layers.maxPooling1d({
+    poolSize: 2,
+    strides: 2
+  }));
+
+  // Another Conv1D layer to capture more complex features
+  model.add(tf.layers.conv1d({
+    filters: 64,
+    kernelSize: 3,
+    activation: 'relu'
+  }));
+
+  // Flatten the 3D output of the CNN layers into a 1D vector for the Dense layers
+  model.add(tf.layers.flatten());
+
+  // Dense Hidden Layer
+  model.add(tf.layers.dense({
+    units: 128,
+    activation: 'relu'
+  }));
+
+  // Output Layer
+  model.add(tf.layers.dense({
+    units: TF_OUTPUTS, // M distinct gestures
+    activation: 'softmax'
   }));
 
   // Step 2: Prepare the data
@@ -198,36 +259,28 @@ async function trainModel() {
 
   const history = await model.fit(inputTensor, outputTensor, {
     epochs: epochs,
+    shuffle: true,
     callbacks: {
       onEpochEnd: (epoch, logs) => {
         // Log the loss and accuracy at the end of each epoch
         console.log(`Epoch ${epoch + 1}: Loss = ${logs.loss.toFixed(4)}, Accuracy = ${logs.acc.toFixed(4)}`);
+        setStatus(`Epoch ${epoch + 1}: Loss = ${logs.loss.toFixed(4)}, Accuracy = ${logs.acc.toFixed(4)}`);
       }
     }
   });
 
   console.log('Training complete!');
-
-  // Optional: Make a prediction with the trained model
-  const testData = tf.randomNormal([1, 150]); // Create a single random input
-  const prediction = model.predict(testData);
-
-  // Print the prediction to the console
-  prediction.print();
-
   // Clean up Tensors to free up memory
   inputTensor.dispose();
   outputTensor.dispose();
-  testData.dispose();
-  prediction.dispose();
 }
 
+// Make a prediction using our model
 async function makePrediction(data) {
   console.log('Making a prediction...');
 
   // Step 1: Convert the JavaScript array to a 2D Tensor
-  // The shape [1, 150] indicates a single sample with 150 elements.
-  const inputTensor = tf.tensor2d([dataToArray(data)], [1, 150]);
+  const inputTensor = tf.tensor3d([dataToArray(data)], [1,50,3]);
 
   // Step 2: Make the prediction using the model's predict method
   // The result will be a Tensor.
