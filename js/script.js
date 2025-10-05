@@ -422,45 +422,15 @@ randXEmit();
 
 
 
-function setQRCode() {
-  let url = this.value.trim();
-  var json = {
-    socialurl : url
-  };
-  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
-    console.log('Wrote URL: ' + url);
-  });
-}
-
-
-function connectToWatch() {
-  // Set up UART.js for only Bluetooth
-  UART.ports = UART.ports.filter(e => e.includes("Bluetooth")); // all watches are Bluetooth
-  UART.timeoutMax = 200; // Ensure .write returns quickly even when the Bangle is sending data constantly
-  // If "?dev=Bangle.js abcd" specified in URL, filter by that name
-  if (window.location.search) {
-    let searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.has("dev")) {
-      console.log(searchParams.get("dev"));
-      UART.optionsBluetooth.filters=[{name:searchParams.get("dev")}];
-    }
-  }
-}
-
-
-// Listener added to connection
-function onLine(l) {
-  console.log("BT> Got line:", l);
-  let json = UART.parseRJSON(l);
-  if (json) {
-    document.getElementById("data_out").innerText = JSON.stringify(json);
-  }
-}
-
+/**********************************************************
+ * GUI Code.
+ *********************************************************/
 
 const CONNECT_SECTION = document.getElementById('connect');
 const SOCIAL_SECTION = document.getElementById('social');
 const CANVAS = document.getElementById('particleCanvas');
+const WATCH_DATA_VIEW = document.getElementById('watchDataStream');
+const WATCH_GESTURE_VIEW = document.getElementById('watchDetection');
 
 const ENABLE_BTN = document.getElementById('enableWatch');
 ENABLE_BTN.addEventListener('click', function() {
@@ -476,3 +446,126 @@ ENABLE_BTN.addEventListener('click', function() {
 
 const URL_TEXTBOX = document.getElementById('socialUrl');
 URL_TEXTBOX.addEventListener('change', setQRCode);
+
+
+
+/**********************************************************
+ * Begin Watch integration code.
+ *********************************************************/
+
+function setQRCode() {
+  let url = this.value.trim();
+  var json = {
+    socialurl : url
+  };
+  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
+    console.log('Wrote URL: ' + url);
+  });
+}
+
+
+function getGestureData() {
+  UART.write(`\x10reset()\n`) // clear out everything currently running
+  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
+  .then(() => UART.write(`\x10Bangle.on("gesture",e=>Bluetooth.println(E.toJS({t:"gesture", data:e})));Bluetooth.println();\n`)) // x,y,z,x,y,z,...
+  .then(function() {
+    let connection = UART.getConnection();
+    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
+    connection.on("line", dataLineReceived);
+    console.log("Complete");
+  });
+}
+
+
+function getCompassData() {
+  UART.write(`\x10reset()\n`) // clear out everything currently running
+  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
+  .then(() => UART.write(`\x10Bangle.on("mag",e=>Bluetooth.println(E.toJS({t:"compass", x:e.x, y:e.y, z:e.z, head:Math.round(e.heading)})));Bangle.setCompassPower(1,"web");Bluetooth.println();\n`))
+  .then(function() {
+    let connection = UART.getConnection();
+    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
+    connection.on("line", dataLineReceived);
+    console.log("Complete");
+  });
+}
+
+
+function getHeartRateData() {
+  UART.write(`\x10reset()\n`) // clear out everything currently running
+  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
+  .then(() => UART.write(`\x10Bangle.on("HRM-raw",e=>Bluetooth.println(E.toJS({t:"hrm", r:e.raw})));Bangle.setHRMPower(1,"web");Bluetooth.println();\n`))
+  .then(function() {
+    let connection = UART.getConnection();
+    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
+    connection.on("line", dataLineReceived);
+    console.log("Complete");
+  });
+}
+
+
+function getAccelerometerData() {
+  UART.write(`\x10reset()\n`) // clear out everything currently running
+  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
+  .then(() => UART.write(`\x10Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:Math.round(e.x*100)/100, y:Math.round(e.y*100)/100, z:Math.round(e.z*100)/100})));Bluetooth.println();\n`))
+  .then(function() {
+    let connection = UART.getConnection();
+    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
+    connection.on("line", dataLineReceived);
+    console.log("Complete");
+  });
+}
+
+
+function stopData() {
+  UART.write(`\x10load()\n`) // reload default (watch) app
+  .then(function() {
+    let connection = UART.getConnection();
+    connection.removeListener("line", dataLineReceived); // remove any existing handler
+    console.log("Complete");
+  });
+}
+
+
+function connectToWatch() {
+  // Set up UART.js for only Bluetooth
+  UART.ports = UART.ports.filter(e => e.includes("Bluetooth")); // all watches are Bluetooth
+  UART.timeoutMax = 200; // Ensure .write returns quickly even when the Bangle is sending data constantly
+  
+  // If "?dev=Bangle.js abcd" specified in URL, filter by that name
+  if (window.location.search) {
+    let searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.has("dev")) {
+      console.log(searchParams.get("dev"));
+      UART.optionsBluetooth.filters=[{name:searchParams.get("dev")}];
+    }
+  }
+  
+  // Change this call to be whatever sensor data you want from the functions above.
+  getGestureData();
+}
+
+
+// Listener added to connection
+function dataLineReceived(line) {
+  console.log("BT> Got line:", line);
+  let json = UART.parseRJSON(line);
+  if (json) {
+    WATCH_DATA_VIEW.innerText = JSON.stringify(json);
+  }
+}
+
+
+
+/**********************************************************
+ * Web AI Model code.
+ *********************************************************/
+
+let WINDOW_SIZE = 30; // 30 samples
+let RECORD_STRIDE = 20; // Create a new training window every N samples
+const NUM_CHANNELS = 4;  // x, y, z, magnitude
+let INPUT_SHAPE = [WINDOW_SIZE, NUM_CHANNELS];
+let gestures = {
+  0: [], // Not Clapping
+  1: [], // Clapping
+};
+let model;
