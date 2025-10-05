@@ -297,6 +297,9 @@ var jmParticleEngine = function() {
       canvas.width = width;
       canvas.height = height;
       ctx = canvas.getContext('2d');
+    },
+    
+    start: function() {
       particleLoop();
     },
 
@@ -437,6 +440,7 @@ ENABLE_BTN.addEventListener('click', function() {
   CONNECT_SECTION.classList.add('invisible');
   SOCIAL_SECTION.classList.remove('removed');
   connectToWatch();
+  jmParticleEngine.start();
   setTimeout(function() {
     CONNECT_SECTION.classList.add('removed');
     SOCIAL_SECTION.classList.remove('invisible');
@@ -447,7 +451,9 @@ ENABLE_BTN.addEventListener('click', function() {
 const URL_TEXTBOX = document.getElementById('socialUrl');
 URL_TEXTBOX.addEventListener('change', setQRCode);
 
-
+window.addEventListener('resize', function() {
+  jmParticleEngine.init('particleCanvas', window.innerWidth, window.innerHeight);
+});
 
 /**********************************************************
  * Begin Watch integration code.
