@@ -4,7 +4,6 @@ body {
   background-size: cover;
   color:#fff;
   font-family: "Roboto", Arial, "Liberation Sans", sans-serif;
-  overflow: hidden;
 }
 
 canvas {
@@ -49,6 +48,12 @@ h2 {
 
 h2:first-of-type {
   padding-top: 0;
+}
+
+p {
+  margin-left: calc(50% - (60%/2));
+  width: 60%;
+  text-align: justify;
 }
 
 input {
