@@ -1,144 +1,43 @@
-<html>
-<head>
-</head>
-<body>
-
-<img src="img/logo.png" style="float:right"/>
-<h1>WebAI Summit 2025 :: Bangle.js</h1>
-
-
-<p>Bangle.js comes with Bluetooth LE, and can communicate with your PC/phone using the Chrome Web Browser and Web Bluetooth.</p>
-
-<p><b>Note:</b> iOS users will need to install a Web Bluetooth capable browser such
-as <a href="https://apps.apple.com/us/app/bluefy-web-ble-browser/id1492822055">Bluefy</a> or
-<a href="https://apps.apple.com/gb/app/webble/id1193531073">WebBLE</a></p>
-
-<h2>Trying Bangle.js out</h2>
-
-<ul>
- <li><a href="https://banglejs.com/apps?dev_id=BANGLEJS2" class="add_mac" target="_blank">Bangle.js App Loader</a></li>
- <li><a href="https://espruino.com/ide" class="add_mac" target="_blank">Web IDE</a></li>
- <li><a href="clap_detect.html" class="add_mac" target="_blank">Training a Clap Detector</a></li>
- <li><a href="gestures.html" class="add_mac" target="_blank">Training with Gesture</a></li>
- <li><a href="simple.html" class="add_mac" target="_blank">Simplest example of getting data</a></li>
- <li><a href="https://github.com/gfwilliams/WebAISummit" target="_blank">Source for this webpage</a></li>
-</ul>
-
-<p>
-Set a Social URL for Bangle.js:<br/>
-<input type="text" id="input_url" style="width:300px" value="https://linkedin.com" /><button id="btn_seturl">Set URL</button>
-</p>
-
-
-<p>
-Press a button to start receiving live data from the Bangle:<br/>
-<button id="btn_getgesture">Get Gestures</button>
-<button id="btn_getaccel">Get Accelerometer</button>
-<button id="btn_getcompass">Get Compass</button>
-<button id="btn_gethrm">Get HRM</button>
-<button id="btn_stop">Stop!</button><br/>
-<div id="data_out">....</div>
-</p>
-
-<script src="https://www.espruino.com/js/uart.js"></script> <!-- https://raw.githubusercontent.com/espruino/EspruinoWebTools/refs/heads/master/uart.js -->
-<script>
-// if any links can take `dev=....` to help with finding the correct device, pass it on
-if (window.location.search) {
-  let links = document.getElementsByClassName("add_mac");
-  for (let i=0;i<links.length;i++) {
-    if (links[i].href.includes("?"))
-      links[i].href += "&"+window.location.search.substr(1);
-    else
-      links[i].href += window.location.search;
-  }
-}
-
-// Set up UART.js for only Bluetooth
-UART.ports = UART.ports.filter(e => e.includes("Bluetooth")); // all watches are Bluetooth
-UART.timeoutMax = 200; // Ensure .write returns quickly even when the Bangle is sending data constantly
-// If "?dev=Bangle.js abcd" specified in URL, filter by that name
-if (window.location.search) {
-  let searchParams = new URLSearchParams(window.location.search);
-  if (searchParams.has("dev"))
-    UART.optionsBluetooth.filters=[{name:searchParams.get("dev")}];
-}
-
-// Code for setting URL
-document.getElementById("btn_seturl").addEventListener("click", function() {
-  let url = document.getElementById("input_url").value.trim();
-  console.log(`Writing URL ${url}`);
-  var json = {
-    socialurl : document.getElementById("input_url").value.trim()
-  };
-  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
-    console.log("Complete");
-  });
-});
-
-// Listener added to connection
-function onLine(l) {
-  console.log("BT> Got line:", l);
-  let json = UART.parseRJSON(l);
-  if (json) {
-    document.getElementById("data_out").innerText = JSON.stringify(json);
-  }
-}
-
-// Code for getting various data
-document.getElementById("btn_getgesture").addEventListener("click", function() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("gesture",e=>Bluetooth.println(E.toJS({t:"gesture", data:e})));Bluetooth.println();\n`)) // x,y,z,x,y,z,...
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", onLine); // remove any existing so we don't get duplicates
-    connection.on("line", onLine);
-    console.log("Complete");
-  });
-});
-document.getElementById("btn_getaccel").addEventListener("click", function() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:Math.round(e.x*100)/100, y:Math.round(e.y*100)/100, z:Math.round(e.z*100)/100})));Bluetooth.println();\n`))
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", onLine); // remove any existing so we don't get duplicates
-    connection.on("line", onLine);
-    console.log("Complete");
-  });
-});
-document.getElementById("btn_getcompass").addEventListener("click", function() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("mag",e=>Bluetooth.println(E.toJS({t:"compass", x:e.x, y:e.y, z:e.z, head:Math.round(e.heading)})));Bangle.setCompassPower(1,"web");Bluetooth.println();\n`))
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", onLine); // remove any existing so we don't get duplicates
-    connection.on("line", onLine);
-    console.log("Complete");
-  });
-});
-document.getElementById("btn_gethrm").addEventListener("click", function() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("HRM-raw",e=>Bluetooth.println(E.toJS({t:"hrm", r:e.raw})));Bangle.setHRMPower(1,"web");Bluetooth.println();\n`))
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", onLine); // remove any existing so we don't get duplicates
-    connection.on("line", onLine);
-    console.log("Complete");
-  });
-});
-document.getElementById("btn_stop").addEventListener("click", function() {
-  UART.write(`\x10load()\n`) // reload default (watch) app
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", onLine); // remove any existing handler
-    console.log("Complete");
-  });
-});
-
-
-</script>
-</body>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0" />
+    <meta name="author" content="Jason Mayes" />
+    <title>Web AI Summit: Bangle.js Demo</title>
+    <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
+    <link href='http://fonts.googleapis.com/css?family=Roboto:500,400italic,300,700,500italic,300italic,400' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" href="css/style.css" type="text/css" />
+  </head>
+  <body>
+    <section>
+      <h1>Web AI Summit 2025: Bangle.js Demo</h1>
+    </section>
+    
+    <section>
+      <canvas id="particleCanvas" class="transition invisible"></canvas>
+    </section>
+    
+    <section id="connect" class="transition">
+      <h2 class="center">Press button to enable gesture recognition!</h2>
+      <button id="enableWatch" type="button">Connect to Watch via Bluetooth</button>
+      <p>Upon clicking this button we'll request to connect to your Bangle.js watch via Bluetooth, after which we will stream sensor data from the watch in real-time, to then classify the data entirely locally (no cloud) using a Web AI model that should detect when you clap your hands!<p>
+      <p>This is just a simple demo, we encourage you to hack after the show with all the other sensor data you can grab from the watch, and let us know what you make! You can <a href="https://github.com/gfwilliams/WebAISummit" target="_blank">view the source code of this webpage on our GitHub repo.</a></p>
+      <p class="center warning">Note: iOS users will need to install a Web Bluetooth capable browser such as <a href="https://apps.apple.com/us/app/bluefy-web-ble-browser/id1492822055" target="_blank">Bluefy</a> or <a href="https://apps.apple.com/gb/app/webble/id1193531073" target="_blank">WebBLE</a>. Laptop users please use Chrome.</p>
+    </section>
+    
+    <section id="social" class="transition invisible removed">
+      <h2>Set a URL below, then double tap watch screen, to create and display QR Code for this URL:</h2>
+      <input id="socialUrl" type="text" value="https://www.linkedin.com/in/webai/" />
+      <p class="center">Paste in your own social URL instead and use it to connect with folk in the break times!</p>
+      <h2 class="center">Watch sensor stream data <br/>(try clapping your hands):</h2>
+      <p id="watchDataStream" class="center">0,0,0</p>
+      <p id="watchDetection" class="center">No Clapping Detected</p>
+      
+      
+    </section>
+    
+    <script src="https://www.espruino.com/js/uart.js"></script> 
+    <script type="text/javascript" src="js/script.js"></script>
+  </body>
 </html>
