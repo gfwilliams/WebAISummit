@@ -1,5 +1,5 @@
 body {
-  background-image: url('https://gfwilliams.github.io/WebAISummit/imgs/back_med.jpg');
+  background-image: url('https://gfwilliams.github.io/WebAISummit/img/back_med.jpg');
   background-repeat: repeat;
   background-size: cover;
   color:#fff;
@@ -26,7 +26,7 @@ a {
 
 h1 {
   aspect-ratio: 10 / 5;
-  background-image: url('https://gfwilliams.github.io/WebAISummit/imgs/WebAISummitWhite.png');
+  background-image: url('https://gfwilliams.github.io/WebAISummit/img/WebAISummitWhite.png');
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
