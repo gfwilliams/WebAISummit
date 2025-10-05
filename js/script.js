@@ -409,7 +409,7 @@ function particleGenerator() {
   );
 }
 
-var emit1 = jmParticleEngine.generateEmitter(Math.ceil(window.innerWidth / 2), window.innerHeight, 100, particleGenerator);
+var emit1 = jmParticleEngine.generateEmitter(Math.ceil(window.innerWidth / 2), window.innerHeight, 64, particleGenerator);
 
 emit1.preloadImage('https://assets.codepen.io/48236/clap.png');
 
@@ -449,7 +449,10 @@ ENABLE_BTN.addEventListener('click', function() {
 });
 
 const URL_TEXTBOX = document.getElementById('socialUrl');
-URL_TEXTBOX.addEventListener('change', setQRCode);
+const SET_URL_BTN = document.getElementById('setURL');
+SET_URL_BTN.addEventListener('click', function(){
+  setQRCode(this.value);
+});
 
 window.addEventListener('resize', function() {
   jmParticleEngine.init('particleCanvas', window.innerWidth, window.innerHeight);
@@ -459,10 +462,9 @@ window.addEventListener('resize', function() {
  * Begin Watch integration code.
  *********************************************************/
 
-function setQRCode() {
-  let url = this.value.trim();
+function setQRCode(url) {
   var json = {
-    socialurl : url
+    socialurl : url.trim()
   };
   UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
     console.log('Wrote URL: ' + url);
