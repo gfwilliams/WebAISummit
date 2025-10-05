@@ -135,6 +135,7 @@ section {
 .warning {
   background-color: #ea6032;
   border: 1px dashed #fff;
+  font-size: 125%;
   margin-left: calc(50% - 10px - (60%/2));
   padding: 10px;
   width: 60%;
