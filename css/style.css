@@ -155,3 +155,7 @@ section {
 #setURL {
   margin-top: 25px;
 }
+
+#watchDataStream {
+  word-break: break-all;
+}
