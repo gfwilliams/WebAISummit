@@ -458,6 +458,39 @@ window.addEventListener('resize', function() {
   jmParticleEngine.init('particleCanvas', window.innerWidth, window.innerHeight);
 });
 
+
+/**********************************************************
+ * Web AI Model code.
+ *********************************************************/
+import { loadLiteRt, loadAndCompile, Tensor } from "@litertjs/core";
+const WINDOW_SIZE = 30;
+const NUM_CHANNELS = 4;
+let dataBuffer = [];
+let model;
+
+
+async function loadModel() {
+  const modelResponse = await fetch('https://assets.codepen.io/48236/clapping.tflite');
+  const modelBuffer = await modelResponse.arrayBuffer();
+  model = await loadAndCompile(new Uint8Array(modelBuffer), { accelerator: "wasm" });
+}
+
+
+function runInference(data) {
+  if (!model) {
+    throw new Error("Model not loaded");
+  }
+  const flatInput = new Float32Array(data.flat());
+  const inputTensor = new Tensor(flatInput, [1, WINDOW_SIZE, NUM_CHANNELS]);
+  const outputTensors = model.run(inputTensor);
+  const outputTensor = outputTensors[0];
+  const probability = outputTensor.toTypedArray()[0];
+  inputTensor.delete();
+  outputTensors.forEach((t) => t.delete());
+  return probability;
+}
+
+
 /**********************************************************
  * Begin Watch integration code.
  *********************************************************/
@@ -560,25 +593,27 @@ function connectToWatch() {
 
 // Listener added to connection
 function dataLineReceived(line) {
-  console.log("BT> Got line:", line);
+  // console.log("BT> Got line:", line);
   let json = UART.parseRJSON(line);
   if (json) {
     WATCH_DATA_VIEW.innerText = JSON.stringify(json);
+
+    const magnitude = Math.sqrt(json.x * json.x + json.y * json.y + json.z * json.z);
+    const sample = [json.x, json.y, json.z, magnitude];
+
+    dataBuffer.push(sample);
+    while (dataBuffer.length > WINDOW_SIZE) {
+      dataBuffer.shift();
+      let classification = runInference(dataBuffer);
+      WATCH_GESTURE_VIEW.innerText = classification;
+    }
   }
 }
 
 
+async function init() {
+  await loadLiteRt('https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/')
+  await loadModel();
+}
 
-/**********************************************************
- * Web AI Model code.
- *********************************************************/
-
-let WINDOW_SIZE = 30; // 30 samples
-let RECORD_STRIDE = 20; // Create a new training window every N samples
-const NUM_CHANNELS = 4;  // x, y, z, magnitude
-let INPUT_SHAPE = [WINDOW_SIZE, NUM_CHANNELS];
-let gestures = {
-  0: [], // Not Clapping
-  1: [], // Clapping
-};
-let model;
+init();
