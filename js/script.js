@@ -451,7 +451,7 @@ ENABLE_BTN.addEventListener('click', function() {
 const URL_TEXTBOX = document.getElementById('socialUrl');
 const SET_URL_BTN = document.getElementById('setURL');
 SET_URL_BTN.addEventListener('click', function(){
-  setQRCode(this.value);
+  setQRCode(URL_TEXTBOX.value);
 });
 
 window.addEventListener('resize', function() {
@@ -511,15 +511,17 @@ function getHeartRateData() {
 }
 
 
-function getAccelerometerData() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:Math.round(e.x*100)/100, y:Math.round(e.y*100)/100, z:Math.round(e.z*100)/100})));Bluetooth.println();\n`))
-  .then(function() {
+function getAccelerometerData() {  
+  UART.write(`\x10reset()\n`) // Clear running code
+    .then(() => new Promise(resolve => setTimeout(resolve, 500)))
+    .then(() => UART.write(`\x10Bangle.setPollInterval(50); Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:e.x, y:e.y, z:e.z})));Bluetooth.println();\n`)) // 50ms = 20Hz
+    .then(function() {
     let connection = UART.getConnection();
-    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
+    connection.removeListener("line", dataLineReceived);
     connection.on("line", dataLineReceived);
-    console.log("Complete");
+  })
+    .catch(e => {
+    console.log("Connection Failed: " + e);
   });
 }
 
@@ -549,7 +551,10 @@ function connectToWatch() {
   }
   
   // Change this call to be whatever sensor data you want from the functions above.
-  getGestureData();
+  getAccelerometerData();
+  // getHeartRateData();
+  // getGestureData();
+  // getCompassData();
 }
 
 
