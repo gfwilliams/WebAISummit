@@ -449,7 +449,7 @@ ENABLE_BTN.addEventListener('click', function() {
 
 const URL_TEXTBOX = document.getElementById('socialUrl');
 const SET_URL_BTN = document.getElementById('setURL');
-SET_URL_BTN.addEventListener('click', function(){
+SET_URL_BTN.addEventListener('click', function() {
   setQRCode(URL_TEXTBOX.value);
 });
 
@@ -459,7 +459,6 @@ window.addEventListener('resize', function() {
 
 
 let clapAnimationEndEpoch = 0;
-
 
 function handleClapAnimation() {
   if (Date.now() > clapAnimationEndEpoch) {
@@ -476,35 +475,36 @@ handleClapAnimation();
 /**********************************************************
  * Web AI Model code.
  *********************************************************/
-import { loadLiteRt, loadAndCompile, Tensor } from "@litertjs/core";
+import {loadLiteRt, loadAndCompile, Tensor} from "@litertjs/core";
+
 const CLAP_CONFIDENCE = 0.6;
 const WINDOW_SIZE = 30;
 const NUM_CHANNELS = 4;
+
 let dataBuffer = [];
-let model;
+let model = undefined;
 let clappingCount = 0;
 
 
-
 async function loadModel() {
-  const modelResponse = await fetch('https://assets.codepen.io/48236/clapping_cnn.tflite');
-  const modelBuffer = await modelResponse.arrayBuffer();
-  model = await loadAndCompile(new Uint8Array(modelBuffer), { accelerator: "wasm" });
+  const MODEL_RESPONSE = await fetch('https://assets.codepen.io/48236/clapping_cnn.tflite');
+  const MODEL_BUFFER = await MODEL_RESPONSE.arrayBuffer();
+  model = await loadAndCompile(new Uint8Array(MODEL_BUFFER), { accelerator: 'wasm' });
 }
 
 
 function runInference(data) {
   if (!model) {
-    throw new Error("Model not loaded");
+    throw new Error('Model not loaded');
   }
-  const flatInput = new Float32Array(data.flat());
-  const inputTensor = new Tensor(flatInput, [1, WINDOW_SIZE, NUM_CHANNELS]);
-  const outputTensors = model.run(inputTensor);
-  const outputTensor = outputTensors[0];
-  const probability = outputTensor.toTypedArray()[0];
-  inputTensor.delete();
-  outputTensors.forEach((t) => t.delete());
-  return probability;
+  const FLAT_INPUT = new Float32Array(data.flat());
+  const INPUT_TENSOR = new Tensor(FLAT_INPUT, [1, WINDOW_SIZE, NUM_CHANNELS]);
+  const OUTPUT_TENSORS = model.run(INPUT_TENSOR);
+  const OUTPUT_DATA = OUTPUT_TENSORS[0];
+  const PROBABILITY = OUTPUT_DATA.toTypedArray()[0];
+  INPUT_TENSOR.delete();
+  OUTPUT_TENSORS.forEach((t) => t.delete());
+  return PROBABILITY;
 }
 
 
@@ -513,7 +513,7 @@ function runInference(data) {
  *********************************************************/
 
 function setQRCode(url) {
-  var json = {
+  let json = {
     socialurl : url.trim()
   };
   UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
@@ -523,80 +523,77 @@ function setQRCode(url) {
 
 
 function getGestureData() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("gesture",e=>Bluetooth.println(E.toJS({t:"gesture", data:e})));Bluetooth.println();\n`)) // x,y,z,x,y,z,...
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
-    connection.on("line", dataLineReceived);
-    console.log("Complete");
-  });
+  UART.write(`\x10reset()\n`) // Clear out everything currently running on watch.
+    .then(new Promise(resolve => setTimeout(resolve, 500))) // Wait for a bit just to make sure.
+    .then(() => UART.write(`\x10Bangle.on("gesture",e=>Bluetooth.println(E.toJS({t:"gesture", data:e})));Bluetooth.println();\n`)) // x,y,z,x,y,z,...
+    .then(function() {
+      let connection = UART.getConnection();
+      connection.removeListener('line', dataLineReceived); // Remove any existing listener so we don't get duplicates.
+      connection.on('line', dataLineReceived);
+    });
 }
 
 
 function getCompassData() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("mag",e=>Bluetooth.println(E.toJS({t:"compass", x:e.x, y:e.y, z:e.z, head:Math.round(e.heading)})));Bangle.setCompassPower(1,"web");Bluetooth.println();\n`))
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
-    connection.on("line", dataLineReceived);
-    console.log("Complete");
-  });
+  UART.write(`\x10reset()\n`) // Clear out everything currently running.
+    .then(new Promise(resolve => setTimeout(resolve, 500))) // Wait for a bit just to make sure.
+    .then(() => UART.write(`\x10Bangle.on("mag",e=>Bluetooth.println(E.toJS({t:"compass", x:e.x, y:e.y, z:e.z, head:Math.round(e.heading)})));Bangle.setCompassPower(1,"web");Bluetooth.println();\n`))
+    .then(function() {
+      let connection = UART.getConnection();
+      connection.removeListener('line', dataLineReceived); // Remove any existing listener so we don't get duplicates.
+      connection.on('line', dataLineReceived);
+    });
 }
 
 
 function getHeartRateData() {
-  UART.write(`\x10reset()\n`) // clear out everything currently running
-  .then(new Promise(resolve => setTimeout(resolve, 500))) // wait for a bit just to make sure
-  .then(() => UART.write(`\x10Bangle.on("HRM-raw",e=>Bluetooth.println(E.toJS({t:"hrm", r:e.raw})));Bangle.setHRMPower(1,"web");Bluetooth.println();\n`))
-  .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", dataLineReceived); // remove any existing so we don't get duplicates
-    connection.on("line", dataLineReceived);
-    console.log("Complete");
-  });
+  UART.write(`\x10reset()\n`) // Clear out everything currently running.
+    .then(new Promise(resolve => setTimeout(resolve, 500))) // Wait for a bit just to make sure.
+    .then(() => UART.write(`\x10Bangle.on("HRM-raw",e=>Bluetooth.println(E.toJS({t:"hrm", r:e.raw})));Bangle.setHRMPower(1,"web");Bluetooth.println();\n`))
+    .then(function() {
+      let connection = UART.getConnection();
+      connection.removeListener('line', dataLineReceived); // Remove any existing listener so we don't get duplicates.
+      connection.on('line', dataLineReceived);
+    });
 }
 
 
 function getAccelerometerData() {  
-  UART.write(`\x10reset()\n`) // Clear running code
-    .then(() => new Promise(resolve => setTimeout(resolve, 500)))
-    .then(() => UART.write(`\x10Bangle.setPollInterval(50); Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:e.x, y:e.y, z:e.z})));Bluetooth.println();\n`)) // 50ms = 20Hz
+  UART.write(`\x10reset()\n`) // Clear out everything currently running.
+    .then(() => new Promise(resolve => setTimeout(resolve, 500))) // Wait for a bit just to make sure.
+    .then(() => UART.write(`\x10Bangle.setPollInterval(50); Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:e.x, y:e.y, z:e.z})));Bluetooth.println();\n`)) // 50ms = 20Hz.
     .then(function() {
-    let connection = UART.getConnection();
-    connection.removeListener("line", dataLineReceived);
-    connection.on("line", dataLineReceived);
-  })
+      let connection = UART.getConnection();
+      connection.removeListener('line', dataLineReceived); // Remove any existing listener so we don't get duplicates.
+      connection.on('line', dataLineReceived);
+    })
     .catch(e => {
-    console.log("Connection Failed: " + e);
-  });
+      console.log('Connection Failed:' + e);
+    });
 }
 
 
 function stopData() {
-  UART.write(`\x10load()\n`) // reload default (watch) app
+  UART.write(`\x10load()\n`) // Reload default (watch) app.
   .then(function() {
     let connection = UART.getConnection();
-    connection.removeListener("line", dataLineReceived); // remove any existing handler
-    console.log("Complete");
+    connection.removeListener('line', dataLineReceived); // Remove any existing listener so we don't get duplicates.
   });
 }
 
 
 function connectToWatch() {
-  // Set up UART.js for only Bluetooth
-  UART.ports = UART.ports.filter(e => e.includes("Bluetooth")); // all watches are Bluetooth
-  UART.timeoutMax = 200; // Ensure .write returns quickly even when the Bangle is sending data constantly
+  // Set up UART.js for only Bluetooth.
+  UART.ports = UART.ports.filter(e => e.includes('Bluetooth'));
+  // Ensure .write returns quickly even when the Bangle is sending data constantly.
+  UART.timeoutMax = 200; 
   
-  // If "?dev=Bangle.js abcd" specified in URL, filter by that name
+  // If "?dev=Bangle.js abcd" specified in URL, filter by that name in Bluetooth devices list.
   if (window.location.search) {
     let searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.has("dev")) {
-      console.log(searchParams.get("dev"));
-      UART.optionsBluetooth.filters=[{name:searchParams.get("dev")}];
+    if (searchParams.has('dev')) {
+      console.log(searchParams.get('dev'));
+      UART.optionsBluetooth.filters=[{name:searchParams.get('dev')}];
     }
   }
   
@@ -608,24 +605,26 @@ function connectToWatch() {
 }
 
 
-// Listener added to connection
+// Handle data sent from watch to web app.
 function dataLineReceived(line) {
-  // console.log("BT> Got line:", line);
   let json = UART.parseRJSON(line);
   if (json) {
     WATCH_DATA_VIEW.innerText = JSON.stringify(json);
 
-    const magnitude = Math.sqrt(json.x * json.x + json.y * json.y + json.z * json.z);
-    const sample = [json.x, json.y, json.z, magnitude];
-
-    dataBuffer.push(sample);
-    while (dataBuffer.length > WINDOW_SIZE) {
+    const MAGNITUDE = Math.sqrt(json.x * json.x + json.y * json.y + json.z * json.z);
+    const SAMPLE = [json.x, json.y, json.z, MAGNITUDE];
+    dataBuffer.push(SAMPLE);
+    
+    if(dataBuffer.length > WINDOW_SIZE) {
       dataBuffer.shift();
+
       let classification = runInference(dataBuffer);
-      WATCH_GESTURE_VIEW.innerText = classification;
+      WATCH_GESTURE_VIEW.innerText = 'Clap confidence: ' + classification.toFixed(2);
+
       if (classification > CLAP_CONFIDENCE) {
         clappingCount++;
-        if (clappingCount > 10) {
+
+        if (clappingCount > 7) {
           clappingCount = 0;
           clapAnimationEndEpoch = Date.now() + 1000;
         }
@@ -636,9 +635,10 @@ function dataLineReceived(line) {
 
 
 async function init() {
-  await loadLiteRt('https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/')
+  // Load LiteRT library.
+  await loadLiteRt('https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/');
+  // Now load the trained Web AI Model.
   await loadModel();
 }
-
 
 init();
