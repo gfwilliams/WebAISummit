@@ -428,7 +428,6 @@ randXEmit();
 /**********************************************************
  * GUI Code.
  *********************************************************/
-
 const CONNECT_SECTION = document.getElementById('connect');
 const SOCIAL_SECTION = document.getElementById('social');
 const CANVAS = document.getElementById('particleCanvas');
@@ -459,18 +458,36 @@ window.addEventListener('resize', function() {
 });
 
 
+let clapAnimationEndEpoch = 0;
+
+
+function handleClapAnimation() {
+  if (Date.now() > clapAnimationEndEpoch) {
+    CANVAS.classList.add('invisible');
+  } else {
+    CANVAS.classList.remove('invisible');
+  }
+  setTimeout(handleClapAnimation, 100);
+}
+
+handleClapAnimation();
+
+
 /**********************************************************
  * Web AI Model code.
  *********************************************************/
 import { loadLiteRt, loadAndCompile, Tensor } from "@litertjs/core";
+const CLAP_CONFIDENCE = 0.6;
 const WINDOW_SIZE = 30;
 const NUM_CHANNELS = 4;
 let dataBuffer = [];
 let model;
+let clappingCount = 0;
+
 
 
 async function loadModel() {
-  const modelResponse = await fetch('https://assets.codepen.io/48236/clapping.tflite');
+  const modelResponse = await fetch('https://assets.codepen.io/48236/clapping_cnn.tflite');
   const modelBuffer = await modelResponse.arrayBuffer();
   model = await loadAndCompile(new Uint8Array(modelBuffer), { accelerator: "wasm" });
 }
@@ -606,6 +623,13 @@ function dataLineReceived(line) {
       dataBuffer.shift();
       let classification = runInference(dataBuffer);
       WATCH_GESTURE_VIEW.innerText = classification;
+      if (classification > CLAP_CONFIDENCE) {
+        clappingCount++;
+        if (clappingCount > 10) {
+          clappingCount = 0;
+          clapAnimationEndEpoch = Date.now() + 1000;
+        }
+      }
     }
   }
 }
@@ -615,5 +639,6 @@ async function init() {
   await loadLiteRt('https://cdn.jsdelivr.net/npm/@litertjs/core/wasm/')
   await loadModel();
 }
+
 
 init();
