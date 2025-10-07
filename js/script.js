@@ -477,7 +477,7 @@ handleClapAnimation();
  *********************************************************/
 import {loadLiteRt, loadAndCompile, Tensor} from "@litertjs/core";
 
-const CLAP_CONFIDENCE = 0.6;
+const CLAP_CONFIDENCE = 0.55;
 const WINDOW_SIZE = 30;
 const NUM_CHANNELS = 4;
 
