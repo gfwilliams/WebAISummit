@@ -439,7 +439,6 @@ ENABLE_BTN.addEventListener('click', function() {
   CONNECT_SECTION.classList.add('invisible');
   SOCIAL_SECTION.classList.remove('removed');
   connectToWatch();
-  jmParticleEngine.start();
   setTimeout(function() {
     CONNECT_SECTION.classList.add('removed');
     SOCIAL_SECTION.classList.remove('invisible');
@@ -458,6 +457,18 @@ window.addEventListener('resize', function() {
 });
 
 
+function resetGUI() {
+  console.log('Resetting GUI');
+  CONNECT_SECTION.classList.remove('invisible');
+  SOCIAL_SECTION.classList.add('removed');
+  setTimeout(function() {
+    CONNECT_SECTION.classList.remove('removed');
+    SOCIAL_SECTION.classList.add('invisible');
+    CANVAS.classList.add('invisible');
+  }, 250);
+}
+
+
 let clapAnimationEndEpoch = 0;
 
 function handleClapAnimation() {
@@ -470,6 +481,7 @@ function handleClapAnimation() {
 }
 
 handleClapAnimation();
+jmParticleEngine.start();
 
 
 /**********************************************************
@@ -558,7 +570,7 @@ function getHeartRateData() {
 }
 
 
-function getAccelerometerData() {  
+function getAccelerometerData() {
   UART.write(`\x10reset()\n`) // Clear out everything currently running.
     .then(() => new Promise(resolve => setTimeout(resolve, 500))) // Wait for a bit just to make sure.
     .then(() => UART.write(`\x10Bangle.setPollInterval(50); Bangle.on("accel",e=>Bluetooth.println(E.toJS({t:"acc", x:e.x, y:e.y, z:e.z})));Bluetooth.println();\n`)) // 50ms = 20Hz.
@@ -569,6 +581,8 @@ function getAccelerometerData() {
     })
     .catch(e => {
       console.log('Connection Failed:' + e);
+      stopData();
+      resetGUI();
     });
 }
 
@@ -607,14 +621,14 @@ function connectToWatch() {
 
 // Handle data sent from watch to web app.
 function dataLineReceived(line) {
-  let json = UART.parseRJSON(line);
+  let json = UART.parseRJSON(line); 
   if (json) {
     WATCH_DATA_VIEW.innerText = JSON.stringify(json);
 
     const MAGNITUDE = Math.sqrt(json.x * json.x + json.y * json.y + json.z * json.z);
     const SAMPLE = [json.x, json.y, json.z, MAGNITUDE];
     dataBuffer.push(SAMPLE);
-    
+
     if(dataBuffer.length > WINDOW_SIZE) {
       dataBuffer.shift();
 
@@ -623,13 +637,15 @@ function dataLineReceived(line) {
 
       if (classification > CLAP_CONFIDENCE) {
         clappingCount++;
-
         if (clappingCount > 7) {
           clappingCount = 0;
           clapAnimationEndEpoch = Date.now() + 1000;
         }
       }
     }
+  } else {
+    stopData();
+    resetGUI();
   }
 }
 
