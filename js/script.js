@@ -499,7 +499,7 @@ let clappingCount = 0;
 
 
 async function loadModel() {
-  const MODEL_RESPONSE = await fetch('clap_detect.tflite');
+  const MODEL_RESPONSE = await fetch('/clap_detect.tflite');
   const MODEL_BUFFER = await MODEL_RESPONSE.arrayBuffer();
   model = await loadAndCompile(new Uint8Array(MODEL_BUFFER), { accelerator: 'wasm' });
 }
