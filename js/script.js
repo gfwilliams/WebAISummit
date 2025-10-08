@@ -528,7 +528,7 @@ function setQRCode(url) {
   let json = {
     socialurl : url.trim()
   };
-  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
+  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});require("Storage").write("tapfix.boot.js","Bangle.accelWr(0x18, Bangle.accelRd(0x18)&127);Bangle.accelWr(0x25, 0x50);Bangle.accelWr(0x18, Bangle.accelRd(0x18)|128);");\n`).then(function() {
     console.log('Wrote URL: ' + url);
   });
 }
