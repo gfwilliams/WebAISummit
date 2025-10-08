@@ -499,7 +499,7 @@ let clappingCount = 0;
 
 
 async function loadModel() {
-  const MODEL_RESPONSE = await fetch('https://assets.codepen.io/48236/clapping_cnn.tflite');
+  const MODEL_RESPONSE = await fetch('clap_detect.tflite');
   const MODEL_BUFFER = await MODEL_RESPONSE.arrayBuffer();
   model = await loadAndCompile(new Uint8Array(MODEL_BUFFER), { accelerator: 'wasm' });
 }
@@ -528,7 +528,7 @@ function setQRCode(url) {
   let json = {
     socialurl : url.trim()
   };
-  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});require("Storage").write("tapfix.boot.js","Bangle.accelWr(0x18, Bangle.accelRd(0x18)&127);Bangle.accelWr(0x25, 0x50);Bangle.accelWr(0x18, Bangle.accelRd(0x18)|128);");\n`).then(function() {
+  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
     console.log('Wrote URL: ' + url);
   });
 }
