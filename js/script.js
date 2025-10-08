@@ -411,7 +411,7 @@ function particleGenerator() {
 
 var emit1 = jmParticleEngine.generateEmitter(Math.ceil(window.innerWidth / 2), window.innerHeight, 64, particleGenerator);
 
-emit1.preloadImage('/imgs/clap.png');
+emit1.preloadImage('/img/clap.png');
 
 jmParticleEngine.addEmitter(emit1, true);
 
