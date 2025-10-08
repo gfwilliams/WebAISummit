@@ -411,7 +411,7 @@ function particleGenerator() {
 
 var emit1 = jmParticleEngine.generateEmitter(Math.ceil(window.innerWidth / 2), window.innerHeight, 64, particleGenerator);
 
-emit1.preloadImage('/img/clap.png');
+emit1.preloadImage('/WebAISummit/img/clap.png');
 
 jmParticleEngine.addEmitter(emit1, true);
 
@@ -499,7 +499,7 @@ let clappingCount = 0;
 
 
 async function loadModel() {
-  const MODEL_RESPONSE = await fetch('http://gfwilliams.github.io/WebAISummit/clap_detect.tflite');
+  const MODEL_RESPONSE = await fetch('/WebAISummit/clap_detect.tflite');
   const MODEL_BUFFER = await MODEL_RESPONSE.arrayBuffer();
   model = await loadAndCompile(new Uint8Array(MODEL_BUFFER), { accelerator: 'wasm' });
 }
