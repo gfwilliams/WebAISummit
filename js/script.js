@@ -623,7 +623,7 @@ function connectToWatch() {
 function dataLineReceived(line) {
   let json = UART.parseRJSON(line); 
   if (json) {
-    WATCH_DATA_VIEW.innerText = JSON.stringify(json);
+    WATCH_DATA_VIEW.innerText = 'Accelerometer Data: ' + json.x.toFixed(3) + ', ' + json.y.toFixed(3) + ', ' + json.z.toFixed(3);
 
     const MAGNITUDE = Math.sqrt(json.x * json.x + json.y * json.y + json.z * json.z);
     const SAMPLE = [json.x, json.y, json.z, MAGNITUDE];
