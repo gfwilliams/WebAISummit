@@ -97,7 +97,7 @@ var jmParticleEngine = function() {
   Emitter.prototype.stop = function() {
     this.emit = false;
   };
-  
+
   Emitter.prototype.fetchCtx = function() {
     return this.ctx;
   };
@@ -298,7 +298,7 @@ var jmParticleEngine = function() {
       canvas.height = height;
       ctx = canvas.getContext('2d');
     },
-    
+
     start: function() {
       particleLoop();
     },
@@ -528,7 +528,7 @@ function setQRCode(url) {
   let json = {
     socialurl : url.trim()
   };
-  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});\n`).then(function() {
+  UART.write(`\x10require("Storage").writeJSON("webaisummit.json", ${JSON.stringify(json)});require("Storage").write("tapfix.boot.js","Bangle.accelWr(0x18, Bangle.accelRd(0x18)&127);Bangle.accelWr(0x25, 0x50);Bangle.accelWr(0x18, Bangle.accelRd(0x18)|128);");\n`).then(function() {
     console.log('Wrote URL: ' + url);
   });
 }
@@ -600,8 +600,8 @@ function connectToWatch() {
   // Set up UART.js for only Bluetooth.
   UART.ports = UART.ports.filter(e => e.includes('Bluetooth'));
   // Ensure .write returns quickly even when the Bangle is sending data constantly.
-  UART.timeoutMax = 200; 
-  
+  UART.timeoutMax = 200;
+
   // If "?dev=Bangle.js abcd" specified in URL, filter by that name in Bluetooth devices list.
   if (window.location.search) {
     let searchParams = new URLSearchParams(window.location.search);
@@ -610,7 +610,7 @@ function connectToWatch() {
       UART.optionsBluetooth.filters=[{name:searchParams.get('dev')}];
     }
   }
-  
+
   // Change this call to be whatever sensor data you want from the functions above.
   getAccelerometerData();
   // getHeartRateData();
@@ -621,7 +621,7 @@ function connectToWatch() {
 
 // Handle data sent from watch to web app.
 function dataLineReceived(line) {
-  let json = UART.parseRJSON(line); 
+  let json = UART.parseRJSON(line);
   if (json) {
     WATCH_DATA_VIEW.innerText = 'Accelerometer Data: ' + json.x.toFixed(3) + ', ' + json.y.toFixed(3) + ', ' + json.z.toFixed(3);
 
