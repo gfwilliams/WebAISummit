@@ -10,12 +10,13 @@
   <script src="https://www.espruino.com/js/uart.js"></script>
   <script>
     document.getElementById("btn").addEventListener("click", function() {
-      UART.write(`Bangle.setHRMPower(1);
-                  Bangle.on("HRM-raw", e => Bluetooth.println(e.raw))\n`,undefined,{noWait:true})
-      .then(function() {
+      UART.write(`reset();\n`).then(function() {
+        return UART.write(`Bangle.setHRMPower(1);
+                  Bangle.on("HRM-raw", e => Bluetooth.println(e.raw))\n`,undefined,{noWait:true});
+      }).then(function() {
         UART.getConnection().on("line", (line) => {
           console.log(line);
-          document.getElementById("hrm").style.width = 
+          document.getElementById("hrm").style.width =
             Math.min(400, (parseInt(line)-3000)/12)+"px";
         });
       });
